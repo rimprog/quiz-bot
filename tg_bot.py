@@ -1,4 +1,5 @@
 import os
+import random
 import logging
 
 from telegram import Bot, Update, ReplyKeyboardMarkup
@@ -28,7 +29,13 @@ def start(update: Update, context: CallbackContext):
 
 
 def echo(update: Update, context: CallbackContext):
-    context.bot.send_message(chat_id=update.effective_chat.id, text=update.message.text)
+    if update.message.text == 'Новый вопрос':
+        questions_and_answers = quiz()
+        random_question_number = random.randint(1, len(questions_and_answers))
+        question = quiz()[random_question_number][0]
+        context.bot.send_message(chat_id=update.effective_chat.id, text=question)
+    else:
+        context.bot.send_message(chat_id=update.effective_chat.id, text=update.message.text)
 
 
 def quiz():
@@ -45,7 +52,8 @@ def quiz():
             answers.append(sentence)
 
     merged_questions_and_answers = list(zip(questions, answers))
-    print(merged_questions_and_answers)
+
+    return merged_questions_and_answers
 
 
 def main():
