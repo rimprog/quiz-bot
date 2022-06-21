@@ -1,7 +1,7 @@
 import os
 import logging
 
-from telegram import Bot, Update
+from telegram import Bot, Update, ReplyKeyboardMarkup
 from telegram.ext import Updater, CommandHandler, MessageHandler, CallbackContext, Filters
 from dotenv import load_dotenv
 
@@ -16,7 +16,15 @@ def error_handler(update: object, context: CallbackContext) -> None:
 
 
 def start(update: Update, context: CallbackContext):
-    context.bot.send_message(chat_id=update.effective_chat.id, text='Здравствуйте')
+    custom_keyboard = [['Новый вопрос', 'Сдаться'],
+                       ['Мой счет']]
+    reply_markup = ReplyKeyboardMarkup(custom_keyboard)
+
+    context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text='Здравствуйте',
+        reply_markup=reply_markup
+    )
 
 
 def echo(update: Update, context: CallbackContext):
