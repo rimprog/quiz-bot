@@ -5,11 +5,13 @@ import logging
 from telegram import Bot, Update, ReplyKeyboardMarkup
 from telegram.ext import Updater, CommandHandler, MessageHandler, CallbackContext, Filters
 from dotenv import load_dotenv
+import redis
 
 from utils.telegram_logger import TelegramLogsHandler
 
 
 logger = logging.getLogger('Telegram logger')
+redis_client = redis.Redis(host='localhost', port=6379, db=0, decode_responses=True)
 
 
 def error_handler(update: object, context: CallbackContext) -> None:
@@ -28,14 +30,27 @@ def start(update: Update, context: CallbackContext):
     )
 
 
-def echo(update: Update, context: CallbackContext):
+def handle_new_question_request(update: Update, context: CallbackContext):
     if update.message.text == 'Новый вопрос':
         questions_and_answers = quiz()
-        random_question_number = random.randint(1, len(questions_and_answers))
+        random_question_number = random.randint(1, len(questions_and_answers)-1)
         question = quiz()[random_question_number][0]
+
+        redis_client.set(update.effective_chat.id, question)
+
         context.bot.send_message(chat_id=update.effective_chat.id, text=question)
+
     else:
-        context.bot.send_message(chat_id=update.effective_chat.id, text=update.message.text)
+        question = redis_client.get(update.effective_chat.id)
+        answer = find_answer(question).split('Ответ:\n')[-1]
+
+        if update.message.text == answer:
+            context.bot.send_message(
+                chat_id=update.effective_chat.id,
+                text='Правильно! Поздравляю! Для следующего вопроса нажми «Новый вопрос»'
+            )
+        else:
+            context.bot.send_message(chat_id=update.effective_chat.id, text=f'Неправильно… Правильный ответ: {answer} Попробуешь ещё раз?')
 
 
 def quiz():
@@ -56,9 +71,19 @@ def quiz():
     return merged_questions_and_answers
 
 
+def find_answer(question):
+    question_and_answer = list(
+        filter(
+            lambda question_and_answer: question_and_answer[0] == question,
+            quiz()
+        )
+    )[0]
+    answer = question_and_answer[1]
+    return answer
+
+
 def main():
     load_dotenv()
-    quiz()
 
     telegram_logger_bot_token = os.getenv('TELEGRAM_LOGGER_BOT_TOKEN')
     developer_chat_id = os.getenv('TELEGRAM_DEVELOPER_USER_ID')
@@ -76,10 +101,10 @@ def main():
     dispatcher = updater.dispatcher
 
     start_handler = CommandHandler('start', start)
-    echo_handler = MessageHandler(Filters.text & (~Filters.command), echo)
+    new_question_request_handler = MessageHandler(Filters.text & (~Filters.command), handle_new_question_request)
 
     dispatcher.add_handler(start_handler)
-    dispatcher.add_handler(echo_handler)
+    dispatcher.add_handler(new_question_request_handler)
 
     dispatcher.add_error_handler(error_handler)
 
