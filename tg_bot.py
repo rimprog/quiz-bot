@@ -2,8 +2,10 @@ import os
 import random
 import logging
 
-from telegram import Bot, Update, ReplyKeyboardMarkup
-from telegram.ext import Updater, CommandHandler, MessageHandler, CallbackContext, Filters
+from telegram import Bot, Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
+from telegram.ext import (Updater, CommandHandler, MessageHandler, RegexHandler,
+                          ConversationHandler, CallbackContext, Filters)
+
 from dotenv import load_dotenv
 import redis
 
@@ -11,11 +13,10 @@ from utils.telegram_logger import TelegramLogsHandler
 
 
 logger = logging.getLogger('Telegram logger')
+
 redis_client = redis.Redis(host='localhost', port=6379, db=0, decode_responses=True)
 
-
-def error_handler(update: object, context: CallbackContext) -> None:
-    logger.error(msg="Exception while handling telegram update:", exc_info=context.error)
+QUESTION, ANSWER = range(2)
 
 
 def start(update: Update, context: CallbackContext):
@@ -25,32 +26,50 @@ def start(update: Update, context: CallbackContext):
 
     context.bot.send_message(
         chat_id=update.effective_chat.id,
-        text='Здравствуйте',
+        text='Здравствуйте. Нажмите "Новый вопрос" чтобы начать игру.',
         reply_markup=reply_markup
     )
 
+    return QUESTION
+
 
 def handle_new_question_request(update: Update, context: CallbackContext):
-    if update.message.text == 'Новый вопрос':
-        questions_and_answers = quiz()
-        random_question_number = random.randint(1, len(questions_and_answers)-1)
-        question = quiz()[random_question_number][0]
+    questions_and_answers = quiz()
+    random_question_number = random.randint(1, len(questions_and_answers)-1)
+    question = quiz()[random_question_number][0]
 
-        redis_client.set(update.effective_chat.id, question)
+    redis_client.set(update.effective_chat.id, question)
 
-        context.bot.send_message(chat_id=update.effective_chat.id, text=question)
+    context.bot.send_message(chat_id=update.effective_chat.id, text=question)
+
+    return ANSWER
+
+
+def handle_solution_attempt(update: Update, context: CallbackContext):
+    question = redis_client.get(update.effective_chat.id)
+    answer_raw = find_answer(question).split('Ответ:\n')[-1]
+    answer = answer_raw[:-1].lower()
+
+    if update.message.text.lower() == answer:
+        context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text='Правильно! Поздравляю! Для следующего вопроса нажми «Новый вопрос»'
+        )
+        return QUESTION
 
     else:
-        question = redis_client.get(update.effective_chat.id)
-        answer = find_answer(question).split('Ответ:\n')[-1]
+        context.bot.send_message(chat_id=update.effective_chat.id, text=f'Неправильно… Правильный ответ: {answer_raw} Попробуешь ещё раз?')
 
-        if update.message.text == answer:
-            context.bot.send_message(
-                chat_id=update.effective_chat.id,
-                text='Правильно! Поздравляю! Для следующего вопроса нажми «Новый вопрос»'
-            )
-        else:
-            context.bot.send_message(chat_id=update.effective_chat.id, text=f'Неправильно… Правильный ответ: {answer} Попробуешь ещё раз?')
+
+def cancel(update: Update, context: CallbackContext):
+    update.message.reply_text('Игра прекращена. Введите "/start" чтобы начать игру заного.',
+                              reply_markup=ReplyKeyboardRemove())
+
+    return ConversationHandler.END
+
+
+def error_handler(update: object, context: CallbackContext) -> None:
+    logger.error(msg="Exception while handling telegram update:", exc_info=context.error)
 
 
 def quiz():
@@ -79,6 +98,7 @@ def find_answer(question):
         )
     )[0]
     answer = question_and_answer[1]
+
     return answer
 
 
@@ -100,11 +120,18 @@ def main():
     updater = Updater(token=os.getenv('TELEGRAM_BOT_TOKEN'))
     dispatcher = updater.dispatcher
 
-    start_handler = CommandHandler('start', start)
-    new_question_request_handler = MessageHandler(Filters.text & (~Filters.command), handle_new_question_request)
+    conversation_handler = ConversationHandler(
+        entry_points=[CommandHandler('start', start)],
 
-    dispatcher.add_handler(start_handler)
-    dispatcher.add_handler(new_question_request_handler)
+        states={
+            QUESTION: [RegexHandler('^Новый вопрос$', handle_new_question_request)],
+            ANSWER: [MessageHandler(Filters.text, handle_solution_attempt)]
+        },
+
+        fallbacks=[CommandHandler('cancel', cancel)]
+    )
+
+    dispatcher.add_handler(conversation_handler)
 
     dispatcher.add_error_handler(error_handler)
 
