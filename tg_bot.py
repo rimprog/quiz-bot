@@ -1,6 +1,7 @@
 import os
 import random
 import logging
+from enum import Enum
 
 from telegram import Bot, Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
 from telegram.ext import (Updater, CommandHandler, MessageHandler, RegexHandler,
@@ -16,7 +17,10 @@ logger = logging.getLogger('Telegram logger')
 
 redis_client = redis.Redis(host='localhost', port=6379, db=0, decode_responses=True)
 
-QUESTION, ANSWER = range(2)
+
+class Conversation(Enum):
+    QUESTION = 1
+    ANSWER = 2
 
 
 def start(update: Update, context: CallbackContext):
@@ -30,7 +34,7 @@ def start(update: Update, context: CallbackContext):
         reply_markup=reply_markup
     )
 
-    return QUESTION
+    return Conversation.QUESTION
 
 
 def handle_new_question_request(update: Update, context: CallbackContext):
@@ -42,7 +46,7 @@ def handle_new_question_request(update: Update, context: CallbackContext):
 
     context.bot.send_message(chat_id=update.effective_chat.id, text=question)
 
-    return ANSWER
+    return Conversation.ANSWER
 
 
 def handle_solution_attempt(update: Update, context: CallbackContext):
@@ -55,7 +59,7 @@ def handle_solution_attempt(update: Update, context: CallbackContext):
             chat_id=update.effective_chat.id,
             text='Правильно! Поздравляю! Для следующего вопроса нажми «Новый вопрос»'
         )
-        return QUESTION
+        return Conversation.QUESTION
 
     else:
         context.bot.send_message(chat_id=update.effective_chat.id, text=f'Неправильно… Правильный ответ: {answer_raw} Попробуешь ещё раз?')
@@ -124,8 +128,8 @@ def main():
         entry_points=[CommandHandler('start', start)],
 
         states={
-            QUESTION: [RegexHandler('^Новый вопрос$', handle_new_question_request)],
-            ANSWER: [MessageHandler(Filters.text, handle_solution_attempt)]
+            Conversation.QUESTION: [RegexHandler('^Новый вопрос$', handle_new_question_request)],
+            Conversation.ANSWER: [MessageHandler(Filters.text, handle_solution_attempt)]
         },
 
         fallbacks=[CommandHandler('cancel', cancel)]
