@@ -59,10 +59,20 @@ def handle_solution_attempt(update: Update, context: CallbackContext):
             chat_id=update.effective_chat.id,
             text='Правильно! Поздравляю! Для следующего вопроса нажми «Новый вопрос»'
         )
+
         return Conversation.QUESTION
 
-    else:
-        context.bot.send_message(chat_id=update.effective_chat.id, text=f'Неправильно… Правильный ответ: {answer_raw} Попробуешь ещё раз?')
+
+def handle_surrender_request(update: Update, context: CallbackContext):
+    question = redis_client.get(update.effective_chat.id)
+    answer = find_answer(question).split('Ответ:\n')[-1]
+
+    context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text=f'Правильный ответ: {answer}'
+    )
+
+    handle_new_question_request(update, context)
 
 
 def cancel(update: Update, context: CallbackContext):
@@ -129,7 +139,8 @@ def main():
 
         states={
             Conversation.QUESTION: [RegexHandler('^Новый вопрос$', handle_new_question_request)],
-            Conversation.ANSWER: [MessageHandler(Filters.text, handle_solution_attempt)]
+            Conversation.ANSWER: [RegexHandler('^Сдаться$', handle_surrender_request),
+                                  MessageHandler(Filters.text, handle_solution_attempt)]
         },
 
         fallbacks=[CommandHandler('cancel', cancel)]
