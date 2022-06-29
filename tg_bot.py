@@ -13,9 +13,12 @@ from utils.quiz import get_random_question, get_answer
 from utils.telegram_logger import TelegramLogsHandler
 
 
+load_dotenv()
+
 logger = logging.getLogger('Telegram logger')
 
-redis_client = redis.Redis(host='localhost', port=6379, db=0, decode_responses=True)
+redis_url = os.getenv('REDIS_URL')
+redis_client = redis.from_url(redis_url, db=0, decode_responses=True)
 
 
 class Conversation(Enum):
@@ -85,8 +88,6 @@ def error_handler(update: object, context: CallbackContext) -> None:
 
 
 def main():
-    load_dotenv()
-
     telegram_logger_bot_token = os.getenv('TELEGRAM_LOGGER_BOT_TOKEN')
     developer_chat_id = os.getenv('TELEGRAM_DEVELOPER_USER_ID')
 
