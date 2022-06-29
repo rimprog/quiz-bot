@@ -1,5 +1,4 @@
 import os
-import random
 import logging
 from enum import Enum
 
@@ -10,6 +9,7 @@ from telegram.ext import (Updater, CommandHandler, MessageHandler, RegexHandler,
 from dotenv import load_dotenv
 import redis
 
+from utils.quiz import get_random_question, get_answer
 from utils.telegram_logger import TelegramLogsHandler
 
 
@@ -38,9 +38,7 @@ def start(update: Update, context: CallbackContext):
 
 
 def handle_new_question_request(update: Update, context: CallbackContext):
-    questions_and_answers = quiz()
-    random_question_number = random.randint(1, len(questions_and_answers)-1)
-    question = quiz()[random_question_number][0]
+    question = get_random_question()
 
     redis_client.set(update.effective_chat.id, question)
 
@@ -51,7 +49,7 @@ def handle_new_question_request(update: Update, context: CallbackContext):
 
 def handle_solution_attempt(update: Update, context: CallbackContext):
     question = redis_client.get(update.effective_chat.id)
-    answer_raw = find_answer(question).split('Ответ:\n')[-1]
+    answer_raw = get_answer(question).split('Ответ:\n')[-1]
     answer = answer_raw[:-1].lower()
 
     if update.message.text.lower() == answer:
@@ -65,7 +63,7 @@ def handle_solution_attempt(update: Update, context: CallbackContext):
 
 def handle_surrender_request(update: Update, context: CallbackContext):
     question = redis_client.get(update.effective_chat.id)
-    answer = find_answer(question).split('Ответ:\n')[-1]
+    answer = get_answer(question).split('Ответ:\n')[-1]
 
     context.bot.send_message(
         chat_id=update.effective_chat.id,
@@ -84,36 +82,6 @@ def cancel(update: Update, context: CallbackContext):
 
 def error_handler(update: object, context: CallbackContext) -> None:
     logger.error(msg="Exception while handling telegram update:", exc_info=context.error)
-
-
-def quiz():
-    with open("quiz_questions/3f15.txt", "r", encoding="KOI8-R") as my_file:
-      file_contents = my_file.read()
-      questions_and_answers = file_contents.split('\n\n')
-
-    questions = []
-    answers = []
-    for sentence in questions_and_answers:
-        if sentence.startswith('Вопрос'):
-            questions.append(sentence)
-        elif sentence.startswith('Ответ'):
-            answers.append(sentence)
-
-    merged_questions_and_answers = list(zip(questions, answers))
-
-    return merged_questions_and_answers
-
-
-def find_answer(question):
-    question_and_answer = list(
-        filter(
-            lambda question_and_answer: question_and_answer[0] == question,
-            quiz()
-        )
-    )[0]
-    answer = question_and_answer[1]
-
-    return answer
 
 
 def main():
