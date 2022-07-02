@@ -10,8 +10,8 @@ def get_quiz():
         default="quiz_questions/3f15.txt"
     )
 
-    with open(questions_answers_path, "r", encoding="KOI8-R") as my_file:
-      file_contents = my_file.read()
+    with open(questions_answers_path, "r", encoding="KOI8-R") as quiz_file:
+      file_contents = quiz_file.read()
       questions_and_answers = file_contents.split('\n\n')
 
     questions = []
