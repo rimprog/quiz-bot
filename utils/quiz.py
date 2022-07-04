@@ -27,19 +27,18 @@ def get_quiz():
     return merged_questions_and_answers
 
 
-def get_random_question():
-    questions_and_answers = get_quiz()
+def get_random_question(questions_and_answers):
     random_question_number = random.randint(1, len(questions_and_answers)-1)
-    random_question = get_quiz()[random_question_number][0]
+    random_question = questions_and_answers[random_question_number][0]
 
     return random_question
 
 
-def get_answer(question):
+def get_answer(question, questions_and_answers):
     question_and_answer = list(
         filter(
             lambda question_and_answer: question_and_answer[0] == question,
-            get_quiz()
+            questions_and_answers
         )
     )[0]
     answer = question_and_answer[1]
