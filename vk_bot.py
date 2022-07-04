@@ -119,7 +119,7 @@ def main():
     load_dotenv()
 
     redis_url = os.getenv('REDIS_URL')
-    redis_client = redis.from_url(redis_url, db=0, decode_responses=True)
+    redis_client = redis.from_url(redis_url, db=1, decode_responses=True)
 
     telegram_logger_bot_token = os.getenv('TELEGRAM_LOGGER_BOT_TOKEN')
     developer_chat_id = os.getenv('TELEGRAM_DEVELOPER_USER_ID')
