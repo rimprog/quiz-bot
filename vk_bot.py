@@ -15,12 +15,7 @@ from utils.quiz import get_quiz, get_random_question, get_answer
 from utils.telegram_logger import TelegramLogsHandler
 
 
-load_dotenv()
-
 logger = logging.getLogger('Telegram logger')
-
-redis_url = os.getenv('REDIS_URL')
-redis_client = redis.from_url(redis_url, db=0, decode_responses=True)
 
 
 def create_keyboard():
@@ -45,7 +40,7 @@ def handle_start_request(event, vk_api, keyboard):
     )
 
 
-def handle_new_question_request(event, vk_api, keyboard, questions_and_answers):
+def handle_new_question_request(event, vk_api, keyboard, questions_and_answers, redis_client):
     question = get_random_question(questions_and_answers)
 
     redis_client.set(event.user_id, question)
@@ -58,7 +53,7 @@ def handle_new_question_request(event, vk_api, keyboard, questions_and_answers):
     )
 
 
-def handle_solution_attempt(event, vk_api, keyboard, questions_and_answers):
+def handle_solution_attempt(event, vk_api, keyboard, questions_and_answers, redis_client):
     question = redis_client.get(event.user_id)
     answer_raw = get_answer(question, questions_and_answers).split('Ответ:\n')[-1]
     answer = answer_raw[:-1].lower()
@@ -79,7 +74,7 @@ def handle_solution_attempt(event, vk_api, keyboard, questions_and_answers):
         )
 
 
-def handle_surrender_request(event, vk_api, keyboard, questions_and_answers):
+def handle_surrender_request(event, vk_api, keyboard, questions_and_answers, redis_client):
     question = redis_client.get(event.user_id)
     answer = get_answer(question, questions_and_answers).split('Ответ:\n')[-1]
 
@@ -100,27 +95,32 @@ def handle_my_score_request(event, vk_api, keyboard):
     )
 
 
-def handle_conversation(event, vk_api, questions_and_answers):
+def handle_conversation(event, vk_api, questions_and_answers, redis_client):
     keyboard = create_keyboard()
 
     if event.text == "Начать":
         handle_start_request(event, vk_api, keyboard)
 
     elif event.text == "Новый вопрос":
-        handle_new_question_request(event, vk_api, keyboard, questions_and_answers)
+        handle_new_question_request(event, vk_api, keyboard, questions_and_answers, redis_client)
 
     elif event.text == "Сдаться":
-        handle_surrender_request(event, vk_api, keyboard, questions_and_answers)
-        handle_new_question_request(event, vk_api, keyboard, questions_and_answers)
+        handle_surrender_request(event, vk_api, keyboard, questions_and_answers, redis_client)
+        handle_new_question_request(event, vk_api, keyboard, questions_and_answers, redis_client)
 
     elif event.text == "Мой счет":
         handle_my_score_request(event, vk_api, keyboard)
 
     else:
-        handle_solution_attempt(event, vk_api, keyboard, questions_and_answers)
+        handle_solution_attempt(event, vk_api, keyboard, questions_and_answers, redis_client)
 
 
 def main():
+    load_dotenv()
+
+    redis_url = os.getenv('REDIS_URL')
+    redis_client = redis.from_url(redis_url, db=0, decode_responses=True)
+
     telegram_logger_bot_token = os.getenv('TELEGRAM_LOGGER_BOT_TOKEN')
     developer_chat_id = os.getenv('TELEGRAM_DEVELOPER_USER_ID')
 
@@ -142,7 +142,7 @@ def main():
     for event in longpoll.listen():
         if event.type == VkEventType.MESSAGE_NEW and event.to_me:
             try:
-                handle_conversation(event, vk_api, questions_and_answers)
+                handle_conversation(event, vk_api, questions_and_answers, redis_client)
             except Exception:
                 logger.exception('An exception was raised while handling vkontakte event:')
 

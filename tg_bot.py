@@ -13,12 +13,7 @@ from utils.quiz import get_quiz, get_random_question, get_answer
 from utils.telegram_logger import TelegramLogsHandler
 
 
-load_dotenv()
-
 logger = logging.getLogger('Telegram logger')
-
-redis_url = os.getenv('REDIS_URL')
-redis_client = redis.from_url(redis_url, db=0, decode_responses=True)
 
 
 class Conversation(Enum):
@@ -27,6 +22,10 @@ class Conversation(Enum):
 
 
 def start(update: Update, context: CallbackContext):
+    redis_url = os.getenv('REDIS_URL')
+    redis_client = redis.from_url(redis_url, db=0, decode_responses=True)
+
+    context.bot_data['redis_client'] = redis_client
     context.bot_data['quiz'] = get_quiz()
 
     custom_keyboard = [['Новый вопрос', 'Сдаться'],
@@ -46,6 +45,7 @@ def handle_new_question_request(update: Update, context: CallbackContext):
     questions_and_answers = context.bot_data['quiz']
     question = get_random_question(questions_and_answers)
 
+    redis_client = context.bot_data['redis_client']
     redis_client.set(update.effective_chat.id, question)
 
     context.bot.send_message(chat_id=update.effective_chat.id, text=question)
@@ -54,8 +54,10 @@ def handle_new_question_request(update: Update, context: CallbackContext):
 
 
 def handle_solution_attempt(update: Update, context: CallbackContext):
-    questions_and_answers = context.bot_data['quiz']
+    redis_client = context.bot_data['redis_client']
     question = redis_client.get(update.effective_chat.id)
+    questions_and_answers = context.bot_data['quiz']
+
     answer_raw = get_answer(question, questions_and_answers).split('Ответ:\n')[-1]
     answer = answer_raw[:-1].lower()
 
@@ -69,6 +71,8 @@ def handle_solution_attempt(update: Update, context: CallbackContext):
 
 
 def handle_surrender_request(update: Update, context: CallbackContext):
+    redis_client = context.bot_data['redis_client']
+
     questions_and_answers = context.bot_data['quiz']
     question = redis_client.get(update.effective_chat.id)
     answer = get_answer(question, questions_and_answers).split('Ответ:\n')[-1]
@@ -93,6 +97,8 @@ def error_handler(update: object, context: CallbackContext) -> None:
 
 
 def main():
+    load_dotenv()
+
     telegram_logger_bot_token = os.getenv('TELEGRAM_LOGGER_BOT_TOKEN')
     developer_chat_id = os.getenv('TELEGRAM_DEVELOPER_USER_ID')
 
