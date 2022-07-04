@@ -14,22 +14,19 @@ def get_quiz():
       file_contents = quiz_file.read()
       questions_and_answers = file_contents.split('\n\n')
 
-    questions = []
-    answers = []
+    merged_questions_and_answers = {}
     for sentence in questions_and_answers:
         if sentence.startswith('Вопрос'):
-            questions.append(sentence)
+            question = sentence
         elif sentence.startswith('Ответ'):
-            answers.append(sentence)
-
-    merged_questions_and_answers = list(zip(questions, answers))
+            answer = sentence
+            merged_questions_and_answers[question] = answer
 
     return merged_questions_and_answers
 
 
 def get_random_question(questions_and_answers):
-    random_question_number = random.randint(1, len(questions_and_answers)-1)
-    random_question = questions_and_answers[random_question_number][0]
+    random_question, random_answer = random.choice(list(questions_and_answers.items()))
 
     return random_question
 
@@ -38,9 +35,10 @@ def get_answer(question, questions_and_answers):
     question_and_answer = list(
         filter(
             lambda question_and_answer: question_and_answer[0] == question,
-            questions_and_answers
+            questions_and_answers.items()
         )
     )[0]
+
     answer = question_and_answer[1]
 
     return answer
