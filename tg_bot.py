@@ -2,6 +2,7 @@ import os
 import random
 import logging
 from enum import Enum
+from functools import partial
 
 from telegram import Bot, Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
 from telegram.ext import (Updater, CommandHandler, MessageHandler, RegexHandler,
@@ -23,10 +24,6 @@ class Conversation(Enum):
 
 
 def start(update: Update, context: CallbackContext):
-    redis_url = os.getenv('REDIS_URL')
-    redis_client = redis.from_url(redis_url, db=0, decode_responses=True)
-
-    context.bot_data['redis_client'] = redis_client
     context.bot_data['quiz'] = get_quiz()
 
     custom_keyboard = [['Новый вопрос', 'Сдаться'],
@@ -42,11 +39,10 @@ def start(update: Update, context: CallbackContext):
     return Conversation.QUESTION
 
 
-def handle_new_question_request(update: Update, context: CallbackContext):
+def handle_new_question_request(update: Update, context: CallbackContext, redis_client):
     questions_and_answers = context.bot_data['quiz']
     question = random.choice(list(questions_and_answers.items()))[0]
 
-    redis_client = context.bot_data['redis_client']
     redis_client.set(update.effective_chat.id, question)
 
     context.bot.send_message(chat_id=update.effective_chat.id, text=question)
@@ -54,8 +50,7 @@ def handle_new_question_request(update: Update, context: CallbackContext):
     return Conversation.ANSWER
 
 
-def handle_solution_attempt(update: Update, context: CallbackContext):
-    redis_client = context.bot_data['redis_client']
+def handle_solution_attempt(update: Update, context: CallbackContext, redis_client):
     question = redis_client.get(update.effective_chat.id)
     questions_and_answers = context.bot_data['quiz']
 
@@ -71,9 +66,7 @@ def handle_solution_attempt(update: Update, context: CallbackContext):
         return Conversation.QUESTION
 
 
-def handle_surrender_request(update: Update, context: CallbackContext):
-    redis_client = context.bot_data['redis_client']
-
+def handle_surrender_request(update: Update, context: CallbackContext, redis_client):
     questions_and_answers = context.bot_data['quiz']
     question = redis_client.get(update.effective_chat.id)
     answer = questions_and_answers[question].split('Ответ:\n')[-1]
@@ -83,7 +76,7 @@ def handle_surrender_request(update: Update, context: CallbackContext):
         text=f'Правильный ответ: {answer}'
     )
 
-    handle_new_question_request(update, context)
+    handle_new_question_request(update, context, redis_client)
 
 
 def cancel(update: Update, context: CallbackContext):
@@ -112,6 +105,9 @@ def main():
     logger.setLevel(logging.INFO)
     logger.addHandler(TelegramLogsHandler(logger_tg_bot, developer_chat_id))
 
+    redis_url = os.getenv('REDIS_URL')
+    redis_client = redis.from_url(redis_url, db=0, decode_responses=True)
+
     updater = Updater(token=os.getenv('TELEGRAM_BOT_TOKEN'))
     dispatcher = updater.dispatcher
 
@@ -119,9 +115,9 @@ def main():
         entry_points=[CommandHandler('start', start)],
 
         states={
-            Conversation.QUESTION: [RegexHandler('^Новый вопрос$', handle_new_question_request)],
-            Conversation.ANSWER: [RegexHandler('^Сдаться$', handle_surrender_request),
-                                  MessageHandler(Filters.text, handle_solution_attempt)]
+            Conversation.QUESTION: [RegexHandler('^Новый вопрос$', partial(handle_new_question_request, redis_client=redis_client))],
+            Conversation.ANSWER: [RegexHandler('^Сдаться$', partial(handle_surrender_request, redis_client=redis_client)),
+                                  MessageHandler(Filters.text, partial(handle_solution_attempt, redis_client=redis_client))]
         },
 
         fallbacks=[CommandHandler('cancel', cancel)]
