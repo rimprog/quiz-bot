@@ -1,4 +1,5 @@
 import os
+import random
 import logging
 from enum import Enum
 
@@ -9,7 +10,7 @@ from telegram.ext import (Updater, CommandHandler, MessageHandler, RegexHandler,
 from dotenv import load_dotenv
 import redis
 
-from utils.quiz import get_quiz, get_random_question, get_answer
+from utils.quiz import get_quiz
 from utils.telegram_logger import TelegramLogsHandler
 
 
@@ -43,7 +44,7 @@ def start(update: Update, context: CallbackContext):
 
 def handle_new_question_request(update: Update, context: CallbackContext):
     questions_and_answers = context.bot_data['quiz']
-    question = get_random_question(questions_and_answers)
+    question = random.choice(list(questions_and_answers.items()))[0]
 
     redis_client = context.bot_data['redis_client']
     redis_client.set(update.effective_chat.id, question)
@@ -58,7 +59,7 @@ def handle_solution_attempt(update: Update, context: CallbackContext):
     question = redis_client.get(update.effective_chat.id)
     questions_and_answers = context.bot_data['quiz']
 
-    answer_raw = get_answer(question, questions_and_answers).split('Ответ:\n')[-1]
+    answer_raw = questions_and_answers[question].split('Ответ:\n')[-1]
     answer = answer_raw[:-1].lower()
 
     if update.message.text.lower() == answer:
@@ -75,7 +76,7 @@ def handle_surrender_request(update: Update, context: CallbackContext):
 
     questions_and_answers = context.bot_data['quiz']
     question = redis_client.get(update.effective_chat.id)
-    answer = get_answer(question, questions_and_answers).split('Ответ:\n')[-1]
+    answer = questions_and_answers[question].split('Ответ:\n')[-1]
 
     context.bot.send_message(
         chat_id=update.effective_chat.id,

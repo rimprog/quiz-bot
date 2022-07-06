@@ -1,5 +1,4 @@
 import os
-import random
 
 from dotenv import load_dotenv
 
@@ -23,22 +22,3 @@ def get_quiz():
             merged_questions_and_answers[question] = answer
 
     return merged_questions_and_answers
-
-
-def get_random_question(questions_and_answers):
-    random_question, random_answer = random.choice(list(questions_and_answers.items()))
-
-    return random_question
-
-
-def get_answer(question, questions_and_answers):
-    question_and_answer = list(
-        filter(
-            lambda question_and_answer: question_and_answer[0] == question,
-            questions_and_answers.items()
-        )
-    )[0]
-
-    answer = question_and_answer[1]
-
-    return answer

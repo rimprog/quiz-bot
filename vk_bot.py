@@ -11,7 +11,7 @@ from telegram import Bot
 import redis
 from dotenv import load_dotenv
 
-from utils.quiz import get_quiz, get_random_question, get_answer
+from utils.quiz import get_quiz
 from utils.telegram_logger import TelegramLogsHandler
 
 
@@ -41,7 +41,7 @@ def handle_start_request(event, vk_api, keyboard):
 
 
 def handle_new_question_request(event, vk_api, keyboard, questions_and_answers, redis_client):
-    question = get_random_question(questions_and_answers)
+    question = random.choice(list(questions_and_answers.items()))[0]
 
     redis_client.set(event.user_id, question)
 
@@ -55,7 +55,7 @@ def handle_new_question_request(event, vk_api, keyboard, questions_and_answers, 
 
 def handle_solution_attempt(event, vk_api, keyboard, questions_and_answers, redis_client):
     question = redis_client.get(event.user_id)
-    answer_raw = get_answer(question, questions_and_answers).split('Ответ:\n')[-1]
+    answer_raw = questions_and_answers[question].split('Ответ:\n')[-1]
     answer = answer_raw[:-1].lower()
 
     if event.text.lower() == answer:
@@ -76,7 +76,7 @@ def handle_solution_attempt(event, vk_api, keyboard, questions_and_answers, redi
 
 def handle_surrender_request(event, vk_api, keyboard, questions_and_answers, redis_client):
     question = redis_client.get(event.user_id)
-    answer = get_answer(question, questions_and_answers).split('Ответ:\n')[-1]
+    answer = questions_and_answers[question].split('Ответ:\n')[-1]
 
     vk_api.messages.send(
         user_id=event.user_id,
